@@ -1,0 +1,86 @@
+name: moonbot_teleop
+version: 1
+
+# Robot type for LeRobot dataset metadata
+robot_type: moonbot
+
+# Recording parameters
+rate_hz: 30  # This must be an integer
+max_duration_s: 180.0
+
+# Policy inference parameters # Generate 5 actions per inference (reasonable for 0.5Hz)
+observations:
+  - key: observation.images.eef
+    topic: /eef/camera/color/image_raw
+    type: sensor_msgs/msg/Image
+    image:
+      # bag_to_lerobot decodes to RGB and resizes here
+      # resize: [512, 512]
+      resize: [480, 640]
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 10}
+
+  - key: observation.images.front
+    topic: /body/camera/color/image_raw
+    type: sensor_msgs/msg/Image
+    image:
+      # bag_to_lerobot decodes to RGB and resizes here
+      # resize: [512, 512]
+      resize: [480, 640]
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 10}
+
+  - key: observation.images.right
+    topic: /right/camera/color/image_raw
+    type: sensor_msgs/msg/Image
+    image:
+      # bag_to_lerobot decodes to RGB and resizes here
+      # resize: [512, 512]
+      resize: [480, 640]
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 10}
+
+  - key: observation.state
+    topic: /leg302/joint_read
+    type: sensor_msgs/msg/JointState
+    selector:
+      names: [position.leg302_joint1, position.leg302_joint2, position.leg302_joint3, position.leg302_joint4, position.leg302_joint5, position.leg302_joint6, position.leg302_joint7, position.leg302_grip2]
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 50}
+
+  - key: observation.state
+    topic: /leg302/tip_pos
+    type: geometry_msgs/msg/Transform
+    selector:
+      names: [translation.x, translation.y, translation.z, rotation.x, rotation.y, rotation.z]
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 50}
+
+  - key: observation.state
+    topic: /F_ee
+    type: geometry_msgs/msg/WrenchStamped
+    selector:
+      names: [wrench.force.x, wrench.force.y, wrench.force.z, wrench.torque.x, wrench.torque.y, wrench.torque.z]
+    align: {strategy: hold, stamp: header, tol_ms: 1500}
+    qos: {reliability: best_effort, history: keep_last, depth: 50}
+
+actions:
+  - key: action
+    publish:
+      topic: /leg302/joint_set_teleop
+      type: sensor_msgs/msg/JointState
+      layout: flat
+      qos: {reliability: best_effort, history: keep_last, depth: 10}
+      strategy:
+        mode: nearest  # 'fifo' | 'nearest' - nearest selects action closest to current time
+        tolerance_ms: 500  
+    selector:
+      # For diff_drive, only linear.x (forward/back) and angular.z (rotation) matter
+      names: [position.leg302_joint1, position.leg302_joint2, position.leg302_joint3, position.leg302_joint4, position.leg302_joint5, position.leg302_joint6, position.leg302_joint7, position.leg302_grip2]
+    from_tensor:
+      # Clamp linear.x and angular.z to reasonable diff_drive range
+      # clamp: [-3.2, 3.2]
+    safety_behavior: hold  # 'zeros' to send all zeros when stopped, 'hold' to maintain last command
+
+recording:
+  storage: mcap

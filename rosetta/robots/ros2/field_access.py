@@ -124,6 +124,7 @@ def parse_field_selector(selector: str, fields: dict[str, str], *, default: str,
         )
     return attr, name
 
+import math
 
 def gather_named_fields(
     selectors: Iterable[str],
@@ -134,25 +135,38 @@ def gather_named_fields(
     default: str,
     msg_type: str,
 ) -> np.ndarray:
-    """
-    Gather selector values from a parallel-array message family (decode side).
+    if not hasattr(gather_named_fields, "_cache"):
+        gather_named_fields._cache = {}
 
-    ``msg_names`` is the message's name list; each selected field's array on
-    ``container`` aligns 1:1 with it (JointState: the message itself;
-    JointTrajectory: the point). Shared by every parallel-array decoder so
-    the lookup/bounds semantics cannot drift between them.
-    """
     name_to_idx = {name: i for i, name in enumerate(msg_names)}
     out = []
+
     for selector in selectors:
         attr, name = parse_field_selector(selector, fields, default=default, msg_type=msg_type)
-        if name not in name_to_idx:
-            raise ValueError(f"{msg_type} name '{name}' not in message. Available: {list(name_to_idx)}")
-        idx = name_to_idx[name]
-        arr = getattr(container, attr)
-        if idx >= len(arr):
-            raise ValueError(f"Index {idx} out of range for '{attr}' (len={len(arr)})")
-        out.append(float(arr[idx]))
+        cache_key = f"{msg_type}:{attr}:{name}"
+
+        val = None
+        if name in name_to_idx:
+            idx = name_to_idx[name]
+            arr = getattr(container, attr)
+            if idx < len(arr):
+                raw_val = float(arr[idx])
+                # Ensure the extracted value is valid and not NaN
+                if not math.isnan(raw_val):
+                    val = raw_val
+
+        if val is not None:
+            # Valid number found: update cache
+            gather_named_fields._cache[cache_key] = val
+        elif cache_key in gather_named_fields._cache:
+            # Missing or NaN: use last known valid value
+            val = gather_named_fields._cache[cache_key]
+        else:
+            # Default fallback if NaN occurs on the very first frame
+            val = 0.0
+
+        out.append(val)
+
     return np.asarray(out, dtype=np.float64)
 
 

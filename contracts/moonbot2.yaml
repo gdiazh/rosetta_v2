@@ -1,0 +1,57 @@
+# moonbot_teleop: differential-drive base.
+# See stone.yaml for the annotated tour of the contract format.
+
+robot_type: moonbot_teleop
+robot_interface: ros2
+fps: 30
+
+observations:
+  observation.images.front:
+    channel: {topic: /body/camera/color/image_raw,
+              type: sensor_msgs/msg/Image,
+              qos: {reliability: best_effort, history: keep_last, depth: 10}}
+    align: {strategy: hold, timeline: header}
+    apply: [resize: [480, 640]]
+
+  observation.images.eef:
+    channel: {topic: /eef/camera/color/image_raw,
+              type: sensor_msgs/msg/Image,
+              qos: {reliability: best_effort, history: keep_last, depth: 10}}
+    align: {strategy: hold, timeline: header}
+    apply: [resize: [480, 640]]
+
+  observation.images.right:
+    channel: {topic: /right/camera/color/image_raw,
+              type: sensor_msgs/msg/Image,
+              qos: {reliability: best_effort, history: keep_last, depth: 10}}
+    align: {strategy: hold, timeline: header}
+    apply: [resize: [480, 640]]
+
+  # Concatenated from wheels + imu + odom (16 dims total), in order.
+  observation.state:
+    - channel: {topic: /leg302/joint_read,
+                type: sensor_msgs/msg/JointState,
+                qos: {reliability: best_effort, history: keep_last, depth: 50}}
+      align: {strategy: hold, timeline: header}
+      select: [position.leg302_joint1, position.leg302_joint2, position.leg302_joint3, position.leg302_joint4, position.leg302_joint5, position.leg302_joint6, position.leg302_joint7, position.leg302_grip2]
+    - channel: {topic: /leg302/tip_pos,
+                type: geometry_msgs/msg/Transform,
+                decoder: "rosetta.examples.moonbot_codecs:decode_transform",
+                qos: {reliability: best_effort, history: keep_last, depth: 50}}
+      align: {strategy: hold, timeline: receive}
+      select: [translation.x, translation.y, translation.z, rotation.x, rotation.y, rotation.z, rotation.w]
+    # - channel: {topic: /F_ee,
+    #             type: geometry_msgs/msg/WrenchStamped,
+    #             decoder: "rosetta.examples.moonbot_codecs:decode_wrench_stamped",
+    #             qos: {reliability: best_effort, history: keep_last, depth: 50}}
+    #   align: {strategy: hold, timeline: header}
+    #   select: [wrench.force.x, wrench.force.y, wrench.force.z, wrench.torque.x, wrench.torque.y, wrench.torque.z]
+
+actions:
+  action:
+    channel: {topic: /leg302/joint_set_teleop, type: sensor_msgs/msg/JointState,
+              qos: {reliability: reliable, history: keep_last, depth: 10},
+              safety: hold}
+    align: {strategy: hold, timeline: header}
+    select: [position.leg302_joint1, position.leg302_joint2, position.leg302_joint3, position.leg302_joint4, position.leg302_joint5, position.leg302_joint6, position.leg302_joint7, position.leg302_grip2]
+
